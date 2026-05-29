@@ -1,0 +1,141 @@
+# Build directories
+build/
+Build/
+BUILD/
+*.build/
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.dll
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+*.bin
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Platform specific
+.DS_Store
+Thumbs.db
+
+# STM32 specific
+*.map
+*.lst
+*.hex
+*.bin
+*.axf
+*.elf
+*.dmp
+
+# Makefile generated files
+*.d
+*.dep
+
+# GCC generated files
+*.gcno
+*.gcda
+*.gcov
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Keil uVision
+*.uvgui.*
+*.uvoptx
+*.uvprojx
+*.crf
+*.lnp
+*.sct
+*.dep
+
+# IAR Embedded Workbench
+*.ewd
+*.ewp
+*.eww
+*.dep
+*.log
+
+# STM32CubeIDE
+.project
+.cproject
+.settings/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.sav
+
+# Log files
+*.log
+
+# Coverage reports
+*.gcov
+*.gcda
+*.gcno
+
+# Dependencies
+.deps/
+.dirstamp
+
+# Compiled Resource bundles
+*.resources
+
+# Package Files
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
