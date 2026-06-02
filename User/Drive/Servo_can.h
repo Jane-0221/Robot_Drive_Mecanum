@@ -12,6 +12,7 @@ extern "C" {
 #define SERVO_CAN_COMMAND_DELAY_MS 10U
 #endif
 
+#define SERVO_CAN_ISL60C_PULSES_PER_REV 10000L
 #define SERVO_CAN_NODE_BROADCAST 0U
 
 #define SERVO_CAN_COB_NMT       0x000U
@@ -126,6 +127,20 @@ uint8_t Servo_CAN_StartHoming(hcan_t *hcan, uint8_t node_id);
 uint8_t Servo_CAN_SetCurrentPositionZero(hcan_t *hcan, uint8_t node_id);
 
 uint8_t Servo_CAN_ConfigPDO_Default(hcan_t *hcan, uint8_t node_id, uint16_t event_timer_ms);
+uint8_t Servo_CAN_InitISL60C_ProfilePosition(hcan_t *hcan,
+                                             uint8_t node_id,
+                                             uint16_t event_timer_ms,
+                                             uint32_t profile_velocity,
+                                             uint32_t profile_acceleration);
+uint8_t Servo_CAN_ISL60C_InitMinimalPosition(hcan_t *hcan,
+                                             uint8_t node_id,
+                                             uint32_t profile_velocity,
+                                             uint32_t profile_acceleration);
+uint8_t Servo_CAN_ISL60C_MoveRelativePulses(hcan_t *hcan, uint8_t node_id, int32_t position_pulses);
+uint8_t Servo_CAN_ISL60C_MoveAbsolutePulses(hcan_t *hcan, uint8_t node_id, int32_t position_pulses);
+uint8_t Servo_CAN_ISL60C_MoveRelativeRevs(hcan_t *hcan, uint8_t node_id, int16_t revolutions);
+uint8_t Servo_CAN_ISL60C_ReadStatusword(hcan_t *hcan, uint8_t node_id);
+uint8_t Servo_CAN_ISL60C_ReadPosition(hcan_t *hcan, uint8_t node_id);
 uint8_t Servo_CAN_SendRPDO1(hcan_t *hcan, uint8_t node_id, int32_t target_position, uint32_t profile_velocity);
 uint8_t Servo_CAN_SendRPDO2(hcan_t *hcan, uint8_t node_id, int32_t target_velocity, int16_t target_torque, uint16_t controlword);
 uint8_t Servo_CAN_SendRPDO3(hcan_t *hcan, uint8_t node_id, int8_t mode);

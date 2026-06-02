@@ -10,7 +10,6 @@
 #define SERVO_CAN_OBJ_TARGET_TORQUE          0x6071U
 #define SERVO_CAN_OBJ_TARGET_POSITION        0x607AU
 #define SERVO_CAN_OBJ_TORQUE_ACTUAL          0x6077U
-#define SERVO_CAN_OBJ_CURRENT_ACTUAL         0x6078U
 #define SERVO_CAN_OBJ_PROFILE_VELOCITY       0x6081U
 #define SERVO_CAN_OBJ_PROFILE_ACCELERATION   0x6083U
 #define SERVO_CAN_OBJ_PROFILE_DECELERATION   0x6084U
@@ -433,10 +432,9 @@ uint8_t Servo_CAN_ConfigPDO_Default(hcan_t *hcan, uint8_t node_id, uint16_t even
     ret |= Servo_CAN_SdoWriteU16(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_COMM + 1U), 0x05U, event_timer_ms);
     ret |= Servo_CAN_SdoWriteU8(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x00U, 0U);
     ret |= Servo_CAN_ConfigPDOMapU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x01U, SERVO_CAN_OBJ_TORQUE_ACTUAL, 0x00U, 0x10U);
-    ret |= Servo_CAN_ConfigPDOMapU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x02U, SERVO_CAN_OBJ_CURRENT_ACTUAL, 0x00U, 0x10U);
-    ret |= Servo_CAN_ConfigPDOMapU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x03U, SERVO_CAN_OBJ_STATUSWORD, 0x00U, 0x10U);
-    ret |= Servo_CAN_ConfigPDOMapU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x04U, SERVO_CAN_OBJ_MODE_DISPLAY, 0x00U, 0x08U);
-    ret |= Servo_CAN_SdoWriteU8(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x00U, 4U);
+    ret |= Servo_CAN_ConfigPDOMapU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x02U, SERVO_CAN_OBJ_STATUSWORD, 0x00U, 0x10U);
+    ret |= Servo_CAN_ConfigPDOMapU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x03U, SERVO_CAN_OBJ_MODE_DISPLAY, 0x00U, 0x08U);
+    ret |= Servo_CAN_SdoWriteU8(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_MAP + 1U), 0x00U, 3U);
     ret |= Servo_CAN_SdoWriteU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_COMM + 1U), 0x01U, cob_id);
     Servo_CAN_StepDelay();
 
@@ -460,6 +458,98 @@ uint8_t Servo_CAN_ConfigPDO_Default(hcan_t *hcan, uint8_t node_id, uint16_t even
     ret |= Servo_CAN_SdoWriteU32(hcan, node_id, (uint16_t)(SERVO_CAN_OBJ_TPDO1_COMM + 2U), 0x01U, cob_id);
 
     return ret;
+}
+
+uint8_t Servo_CAN_InitISL60C_ProfilePosition(hcan_t *hcan,
+                                             uint8_t node_id,
+                                             uint16_t event_timer_ms,
+                                             uint32_t profile_velocity,
+                                             uint32_t profile_acceleration)
+{
+    (void)event_timer_ms;
+
+    return Servo_CAN_ISL60C_InitMinimalPosition(hcan,
+                                                node_id,
+                                                profile_velocity,
+                                                profile_acceleration);
+}
+
+uint8_t Servo_CAN_ISL60C_InitMinimalPosition(hcan_t *hcan,
+                                             uint8_t node_id,
+                                             uint32_t profile_velocity,
+                                             uint32_t profile_acceleration)
+{
+    uint8_t ret = 0U;
+
+    if ((hcan == NULL) || (node_id == SERVO_CAN_NODE_BROADCAST))
+    {
+        return 1U;
+    }
+
+    ret |= Servo_CAN_StartNode(hcan, node_id);
+    Servo_CAN_StepDelay();
+
+    ret |= Servo_CAN_SetMode(hcan, node_id, SERVO_CAN_MODE_PROFILE_POSITION);
+    Servo_CAN_StepDelay();
+
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_SHUTDOWN);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_SWITCH_ON);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_ENABLE_OPERATION);
+    Servo_CAN_StepDelay();
+
+    ret |= Servo_CAN_SetProfileVelocity(hcan, node_id, profile_velocity);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_SetProfileAcceleration(hcan, node_id, profile_acceleration);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_SetProfileDeceleration(hcan, node_id, profile_acceleration);
+    Servo_CAN_StepDelay();
+
+    return ret;
+}
+
+uint8_t Servo_CAN_ISL60C_MoveRelativePulses(hcan_t *hcan, uint8_t node_id, int32_t position_pulses)
+{
+    uint8_t ret = 0U;
+
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_ENABLE_OPERATION);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_SetTargetPosition(hcan, node_id, position_pulses);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_REL_START);
+
+    return ret;
+}
+
+uint8_t Servo_CAN_ISL60C_MoveAbsolutePulses(hcan_t *hcan, uint8_t node_id, int32_t position_pulses)
+{
+    uint8_t ret = 0U;
+
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_ENABLE_OPERATION);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_SetTargetPosition(hcan, node_id, position_pulses);
+    Servo_CAN_StepDelay();
+    ret |= Servo_CAN_WriteControlword(hcan, node_id, SERVO_CAN_CW_ABS_START);
+
+    return ret;
+}
+
+uint8_t Servo_CAN_ISL60C_MoveRelativeRevs(hcan_t *hcan, uint8_t node_id, int16_t revolutions)
+{
+    int32_t pulses = (int32_t)revolutions * (int32_t)SERVO_CAN_ISL60C_PULSES_PER_REV;
+
+    return Servo_CAN_ISL60C_MoveRelativePulses(hcan, node_id, pulses);
+}
+
+uint8_t Servo_CAN_ISL60C_ReadStatusword(hcan_t *hcan, uint8_t node_id)
+{
+    return Servo_CAN_SdoRead(hcan, node_id, SERVO_CAN_OBJ_STATUSWORD, 0x00U);
+}
+
+uint8_t Servo_CAN_ISL60C_ReadPosition(hcan_t *hcan, uint8_t node_id)
+{
+    return Servo_CAN_SdoRead(hcan, node_id, SERVO_CAN_OBJ_POSITION_ACTUAL, 0x00U);
 }
 
 uint8_t Servo_CAN_SendRPDO1(hcan_t *hcan, uint8_t node_id, int32_t target_position, uint32_t profile_velocity)
@@ -579,14 +669,14 @@ uint8_t Servo_CAN_ParseFrame(Servo_CAN_Motor_t *motor, uint32_t identifier, uint
         break;
 
     case SERVO_CAN_COB_TPDO2:
-        if (len < 7U)
+        if (len < 5U)
         {
             return 0U;
         }
         motor->torque_actual = (int16_t)Servo_CAN_ReadU16(&data[0]);
-        motor->current_actual = (int16_t)Servo_CAN_ReadU16(&data[2]);
-        motor->statusword = Servo_CAN_ReadU16(&data[4]);
-        motor->mode_display = (int8_t)data[6];
+        motor->current_actual = 0;
+        motor->statusword = Servo_CAN_ReadU16(&data[2]);
+        motor->mode_display = (int8_t)data[4];
         break;
 
     case SERVO_CAN_COB_TPDO3:

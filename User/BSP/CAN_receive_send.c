@@ -173,6 +173,23 @@ static void CAN_TxCriticalExit(uint32_t primask)
   }
 }
 
+static uint8_t CAN2_ServoLiftFrame_IsKnown(uint32_t identifier)
+{
+  switch (identifier)
+  {
+  case SERVO_CAN_COB_EMCY + SERVO_LIFT_NODE_ID:
+  case SERVO_CAN_COB_TPDO1 + SERVO_LIFT_NODE_ID:
+  case SERVO_CAN_COB_TPDO2 + SERVO_LIFT_NODE_ID:
+  case SERVO_CAN_COB_TPDO3 + SERVO_LIFT_NODE_ID:
+  case SERVO_CAN_COB_SDO_TX + SERVO_LIFT_NODE_ID:
+  case SERVO_CAN_COB_HEARTBEAT + SERVO_LIFT_NODE_ID:
+    return 1U;
+
+  default:
+    return 0U;
+  }
+}
+
 static void CAN_TxDebug_RecordInvalid(FDCAN_HandleTypeDef *hcan)
 {
   int32_t index = CAN_TxFifoDebug_GetIndex(hcan);
@@ -581,10 +598,6 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
           Head_NotifyFeedback(1U);
         }
       }
-      else if (rx_header.IdType == FDCAN_STANDARD_ID)
-      {
-        Servo_Lift_RxCallback(rx_header.Identifier, rx_header.IdType, rx_data);
-      }
     }
 
     // ========== FDCAN2 数据处理（达妙/RobStride电机） ==========
@@ -614,7 +627,14 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
           CAN_ArmFeedbackDebug_Record(5U);
           break;
         default:
-          can2_std_rx_unknown_debug++;
+          if (CAN2_ServoLiftFrame_IsKnown(rx_header.Identifier) != 0U)
+          {
+            Servo_Lift_RxCallback(rx_header.Identifier, rx_header.IdType, rx_data);
+          }
+          else
+          {
+            can2_std_rx_unknown_debug++;
+          }
           break;
         }
       }

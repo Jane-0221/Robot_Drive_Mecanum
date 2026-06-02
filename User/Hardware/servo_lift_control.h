@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #ifndef SERVO_LIFT_PROFILE_VELOCITY
-#define SERVO_LIFT_PROFILE_VELOCITY 20000U
+#define SERVO_LIFT_PROFILE_VELOCITY 10000U
 #endif
 
 #ifndef SERVO_LIFT_PROFILE_ACCELERATION
@@ -67,14 +67,33 @@ typedef struct
     uint32_t last_enable_retry_tick_ms;
 } Servo_Lift_Debug_t;
 
+typedef enum
+{
+    SERVO_LIFT_DEBUG_CMD_NONE = 0,
+    SERVO_LIFT_DEBUG_CMD_INIT = 1,
+    SERVO_LIFT_DEBUG_CMD_REL_POS_ONE_REV = 2,
+    SERVO_LIFT_DEBUG_CMD_REL_NEG_ONE_REV = 3,
+    SERVO_LIFT_DEBUG_CMD_REL_PULSES = 4,
+    SERVO_LIFT_DEBUG_CMD_READ_STATUS = 5,
+    SERVO_LIFT_DEBUG_CMD_READ_POSITION = 6,
+    SERVO_LIFT_DEBUG_CMD_ABS_PULSES = 7,
+} Servo_Lift_DebugCommand_t;
+
 extern int16_t aim_tx_height;
 extern int16_t lift_height_final;
 extern uint16_t lift_current_height;
 extern volatile Servo_Lift_Debug_t servo_lift_debug;
+extern volatile uint8_t servo_lift_debug_cmd;
+extern volatile int32_t servo_lift_debug_arg_pulses;
+extern volatile uint8_t servo_lift_debug_last_cmd;
+extern volatile uint8_t servo_lift_debug_last_cmd_status;
+extern volatile uint32_t servo_lift_debug_cmd_count;
 
 void Servo_Lift_Init(void);
 void Servo_Lift_Update(void);
 void Servo_Lift_GoToTarget(int16_t target_height);
+uint8_t Servo_Lift_RelativeMovePulses(int32_t position_pulses);
+uint8_t Servo_Lift_RelativeTurnOneCircle(int8_t direction);
 uint16_t Servo_Lift_GetHeight(void);
 void Servo_Lift_RxCallback(uint32_t identifier, uint32_t id_type, uint8_t *data);
 
