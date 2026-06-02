@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build task",
+            "type": "shell",
+            "command": "C:/msys64/ucrt64/bin/mingw32-make.exe",
+            "args": [
+                "-j24"
+            ],
+            "options": {
+                "env": {
+                    "PATH": "C:\\ST\\STM32CubeCLT_1.21.0\\GNU-tools-for-STM32\\bin;C:\\msys64\\ucrt64\\bin;${env:PATH}"
+                }
+            },
+            "problemMatcher": [],          
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        }
+    ]
+}
