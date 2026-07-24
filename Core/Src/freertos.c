@@ -44,6 +44,8 @@
 #include "pt_sensor.h"
 #include "usart.h"
 #include "user_key.h"
+#include "kvms_battery.h"
+#include "rs485_lift.h"
 
 volatile uint32_t pc_up_tx_attempt_debug = 0U;
 volatile uint32_t pc_up_tx_ok_debug = 0U;
@@ -52,6 +54,11 @@ volatile uint32_t pc_up_tx_error_debug = 0U;
 volatile uint32_t pc_up_tx_last_tick_debug = 0U;
 volatile uint32_t pc_up_tx_feedback_age_debug[ARM_LOGICAL_MOTOR_COUNT] = {0U};
 volatile uint32_t pc_up_tx_feedback_tick_debug[ARM_LOGICAL_MOTOR_COUNT] = {0U};
+volatile uint32_t pc_battery_tx_attempt_debug = 0U;
+volatile uint32_t pc_battery_tx_ok_debug = 0U;
+volatile uint32_t pc_battery_tx_busy_debug = 0U;
+volatile uint32_t pc_battery_tx_error_debug = 0U;
+volatile uint32_t pc_battery_tx_last_tick_debug = 0U;
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,8 +72,16 @@ volatile uint32_t pc_up_tx_feedback_tick_debug[ARM_LOGICAL_MOTOR_COUNT] = {0U};
 #define HEAD_TASK_MOTOR_COUNT 2U
 #define PT_PRESS_POLL_PERIOD_MS 10U
 #define PC_COMM_TX_PERIOD_MS 10U
+#define PC_BATTERY_TX_PERIOD_MS 1000U
 #define ARM_CONTROL_TX_PERIOD_MS 1U
 #define LOG_TASK_IDLE_PERIOD_MS 1000U
+#define BATTERY_BMS_POLL_PERIOD_MS 1000U
+#define RS485_LIFT_BOOT_TEST_ENABLE 0U
+#define RS485_LIFT_BOOT_TEST_START_DELAY_MS 3000U
+#define RS485_LIFT_BOOT_TEST_STEP_DELAY_MS 3000U
+#define RS485_LIFT_BOOT_TEST_MOVE_MM (0.0f)
+#define RS485_LIFT_BOOT_TEST_RPM 240U
+#define RS485_LIFT_BOOT_TEST_ACCEL_RPM 2000U
 
 /* USER CODE END PD */
 
@@ -78,6 +93,10 @@ volatile uint32_t pc_up_tx_feedback_tick_debug[ARM_LOGICAL_MOTOR_COUNT] = {0U};
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
 uint32_t color = 0;
+volatile uint32_t rs485_lift_boot_test_step_debug = 0U;
+volatile uint32_t rs485_lift_boot_test_submit_count_debug = 0U;
+volatile uint32_t rs485_lift_boot_test_last_result_debug = 0U;
+volatile uint32_t rs485_lift_boot_test_last_tick_debug = 0U;
 typedef enum
 {
   STACK_REMOTE_CONTROL = 0,
@@ -89,6 +108,8 @@ typedef enum
   STACK_LOG_AND_DEBUG,
   STACK_ARM_SV,
   STACK_PC_COMM,
+  STACK_BATTERY_BMS,
+  STACK_RS485_LIFT,
   STACK_TASK_COUNT
 } StackWatermarkIndex_t;
 
@@ -162,11 +183,29 @@ const osThreadAttr_t PC_Comm_attributes = {
     .stack_size = 256 * 4,
     .priority = (osPriority_t)osPriorityRealtime,
 };
+/* Definitions for Battery_BMS */
+osThreadId_t Battery_BMSHandle;
+const osThreadAttr_t Battery_BMS_attributes = {
+    .name = "Battery_BMS",
+    .stack_size = 512 * 4,
+    .priority = (osPriority_t)osPriorityLow,
+};
+/* Definitions for Rs485_Lift */
+osThreadId_t Rs485_LiftHandle;
+const osThreadAttr_t Rs485_Lift_attributes = {
+    .name = "Rs485_Lift",
+    .stack_size = 512 * 4,
+    .priority = (osPriority_t)osPriorityHigh1,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
 void Pump_Update(void);
 static void UpdateTaskStackWatermarks(void);
+static void Rs485LiftBootTest_Update(void);
+#if (RS485_LIFT_BOOT_TEST_ENABLE != 0U)
+static uint8_t SubmitRs485LiftBootTestCommand(Rs485LiftCommandId_t id, float move_mm);
+#endif
 
 /* USER CODE END FunctionPrototypes */
 
@@ -179,6 +218,8 @@ void Arm_update_Task(void *argument);
 void Log_and_debug_Task(void *argument);
 void Arm_SV_Task(void *argument);
 void PC_Comm_Task(void *argument);
+void Battery_BMS_Task(void *argument);
+void Rs485_Lift_Task(void *argument);
 
 extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -221,7 +262,124 @@ static void UpdateTaskStackWatermarks(void)
   freertos_stack_watermark_words[STACK_LOG_AND_DEBUG] = GetStackHighWaterWords(Log_and_debugHandle);
   freertos_stack_watermark_words[STACK_ARM_SV] = GetStackHighWaterWords(Arm_SVHandle);
   freertos_stack_watermark_words[STACK_PC_COMM] = GetStackHighWaterWords(PC_CommHandle);
+  freertos_stack_watermark_words[STACK_BATTERY_BMS] = GetStackHighWaterWords(Battery_BMSHandle);
+  freertos_stack_watermark_words[STACK_RS485_LIFT] = GetStackHighWaterWords(Rs485_LiftHandle);
 }
+
+static void Rs485LiftBootTest_Update(void)
+{
+#if (RS485_LIFT_BOOT_TEST_ENABLE != 0U)
+  static uint32_t start_tick = 0U;
+  static uint32_t step_tick = 0U;
+  static uint8_t step = 0U;
+  Rs485LiftStatus_t status;
+  uint32_t now = osKernelGetTickCount();
+
+  if (start_tick == 0U)
+  {
+    start_tick = now;
+  }
+
+  rs485_lift_boot_test_step_debug = step;
+
+  if (step == 0U)
+  {
+    if ((now - start_tick) < RS485_LIFT_BOOT_TEST_START_DELAY_MS)
+    {
+      return;
+    }
+    if ((Rs485Lift_CopyStatus(&status) == 0U) ||
+        (status.rx_count < 3U) ||
+        (status.last_error != RS485_LIFT_ERROR_NONE))
+    {
+      return;
+    }
+    step = 1U;
+  }
+
+  if ((step != 1U) && ((now - step_tick) < RS485_LIFT_BOOT_TEST_STEP_DELAY_MS))
+  {
+    return;
+  }
+
+  switch (step)
+  {
+  case 1U:
+    if (SubmitRs485LiftBootTestCommand(RS485_LIFT_CMD_STOP, 0.0f) != 0U)
+    {
+      step = 2U;
+      step_tick = now;
+    }
+    break;
+
+  case 2U:
+    if (SubmitRs485LiftBootTestCommand(RS485_LIFT_CMD_SETUP, 0.0f) != 0U)
+    {
+      step = 3U;
+      step_tick = now;
+    }
+    break;
+
+  case 3U:
+    if (SubmitRs485LiftBootTestCommand(RS485_LIFT_CMD_ENABLE, 0.0f) != 0U)
+    {
+      step = 4U;
+      step_tick = now;
+    }
+    break;
+
+  case 4U:
+    if (SubmitRs485LiftBootTestCommand(RS485_LIFT_CMD_FORWARD, RS485_LIFT_BOOT_TEST_MOVE_MM) != 0U)
+    {
+      step = 5U;
+      step_tick = now;
+    }
+    break;
+
+  case 5U:
+    if (SubmitRs485LiftBootTestCommand(RS485_LIFT_CMD_STOP, 0.0f) != 0U)
+    {
+      step = 7U;
+      step_tick = now;
+    }
+    break;
+
+  default:
+    break;
+  }
+
+  rs485_lift_boot_test_step_debug = step;
+#else
+  rs485_lift_boot_test_step_debug = 0U;
+#endif
+}
+
+#if (RS485_LIFT_BOOT_TEST_ENABLE != 0U)
+static uint8_t SubmitRs485LiftBootTestCommand(Rs485LiftCommandId_t id, float move_mm)
+{
+  Rs485LiftCommand_t command;
+  uint8_t accepted;
+
+  Rs485Lift_SetDefaultCommand(&command, id);
+  command.rpm = RS485_LIFT_BOOT_TEST_RPM;
+  command.accel_rpm = RS485_LIFT_BOOT_TEST_ACCEL_RPM;
+  command.move_mm = move_mm;
+  if (id == RS485_LIFT_CMD_STOP)
+  {
+    command.flags = RS485_LIFT_FLAG_SNAP_AFTER_STOP;
+  }
+
+  accepted = Rs485Lift_SubmitCommand(&command);
+  rs485_lift_boot_test_last_result_debug = accepted;
+  if (accepted != 0U)
+  {
+    rs485_lift_boot_test_submit_count_debug++;
+    rs485_lift_boot_test_last_tick_debug = osKernelGetTickCount();
+  }
+
+  return accepted;
+}
+#endif
 /* USER CODE END 2 */
 
 /**
@@ -279,6 +437,12 @@ void MX_FREERTOS_Init(void)
   /* creation of PC_Comm */
   PC_CommHandle = osThreadNew(PC_Comm_Task, NULL, &PC_Comm_attributes);
 
+  /* creation of Battery_BMS */
+  Battery_BMSHandle = osThreadNew(Battery_BMS_Task, NULL, &Battery_BMS_attributes);
+
+  /* creation of Rs485_Lift */
+  Rs485_LiftHandle = osThreadNew(Rs485_Lift_Task, NULL, &Rs485_Lift_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -315,11 +479,10 @@ void Remote_control_Task(void *argument)
     }
     SBUS_UpdateIfNew();
     // uint8_t arm_disable_active = Arm_Motor_Disable_Updata();
-    Head_Motor_Enable_Disable_Updata();
-
     if ((control_mode == CONTROL_MODE_REMOTE))
     {
       // 遥控模式
+      Head_Motor_Enable_Disable_Updata();
       Pump_Control_Updata();
       Head_Motor_Control_Updata();
       Arm_Motor_Control_Updata();
@@ -330,6 +493,7 @@ void Remote_control_Task(void *argument)
     {
       // pc模式
 
+      PC_Rs485_Lift_Control_Updata();
       PC_Pump_Control_Updata();
       PC_Head_Motor_Control_Updata();
       PC_Up_Down_Motor_Control_Updata();
@@ -639,39 +803,76 @@ void PC_Comm_Task(void *argument)
 {
   /* USER CODE BEGIN PC_Comm_Task */
   uint32_t pc_tx_last_tick = osKernelGetTickCount() - PC_COMM_TX_PERIOD_MS;
+  uint32_t pc_battery_tx_last_tick = osKernelGetTickCount();
+  uint8_t pc_battery_tx_pending = 0U;
   /* Infinite loop */
   for (;;)
   {
     uint32_t tick_now = osKernelGetTickCount();
 
     UART_Protocol_UnpackLatest(&pc_dn_data);
+    Control_Mode_Updata();
+    if ((tick_now - pc_battery_tx_last_tick) >= PC_BATTERY_TX_PERIOD_MS)
+    {
+      pc_battery_tx_last_tick = tick_now;
+      pc_battery_tx_pending = 1U;
+    }
+
     if ((tick_now - pc_tx_last_tick) >= PC_COMM_TX_PERIOD_MS)
     {
+      HAL_StatusTypeDef pc_tx_status;
+      uint32_t pc_status_tick = HAL_GetTick();
+
       pc_tx_last_tick = tick_now;
       Arm_Linzu_Data_update();
       Arm_Damiao_Data_update();
       pc_arm_tx_data();
       pc_up_tx_data();
-      pc_up_tx_attempt_debug++;
-      pc_up_tx_last_tick_debug = HAL_GetTick();
+
       for (uint8_t motor_index = 0U; motor_index < ARM_LOGICAL_MOTOR_COUNT; motor_index++)
       {
         uint32_t feedback_tick = arm_feedback_last_tick_debug[motor_index];
         pc_up_tx_feedback_tick_debug[motor_index] = feedback_tick;
-        pc_up_tx_feedback_age_debug[motor_index] = (feedback_tick == 0U) ? 0xFFFFFFFFU : (pc_up_tx_last_tick_debug - feedback_tick);
+        pc_up_tx_feedback_age_debug[motor_index] = (feedback_tick == 0U) ? 0xFFFFFFFFU : (pc_status_tick - feedback_tick);
       }
-      HAL_StatusTypeDef pc_tx_status = send_up_frame(&huart10);
-      if (pc_tx_status == HAL_OK)
+
+      if (pc_battery_tx_pending != 0U)
       {
-        pc_up_tx_ok_debug++;
-      }
-      else if (pc_tx_status == HAL_BUSY)
-      {
-        pc_up_tx_busy_debug++;
+        pc_battery_tx_attempt_debug++;
+        pc_battery_tx_last_tick_debug = pc_status_tick;
+        pc_tx_status = send_battery_up_frame(&huart10);
+        if (pc_tx_status == HAL_OK)
+        {
+          pc_battery_tx_ok_debug++;
+          pc_battery_tx_pending = 0U;
+        }
+        else if (pc_tx_status == HAL_BUSY)
+        {
+          pc_battery_tx_busy_debug++;
+        }
+        else
+        {
+          pc_battery_tx_error_debug++;
+          pc_battery_tx_pending = 0U;
+        }
       }
       else
       {
-        pc_up_tx_error_debug++;
+        pc_up_tx_attempt_debug++;
+        pc_up_tx_last_tick_debug = pc_status_tick;
+        pc_tx_status = send_up_frame_usb();
+        if (pc_tx_status == HAL_OK)
+        {
+          pc_up_tx_ok_debug++;
+        }
+        else if (pc_tx_status == HAL_BUSY)
+        {
+          pc_up_tx_busy_debug++;
+        }
+        else
+        {
+          pc_up_tx_error_debug++;
+        }
       }
     }
 
@@ -679,6 +880,56 @@ void PC_Comm_Task(void *argument)
     osDelay(1);
   }
   /* USER CODE END PC_Comm_Task */
+}
+
+/* USER CODE BEGIN Header_Battery_BMS_Task */
+/**
+ * @brief Function implementing the Battery_BMS thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_Battery_BMS_Task */
+void Battery_BMS_Task(void *argument)
+{
+  /* USER CODE BEGIN Battery_BMS_Task */
+  uint32_t battery_next_tick;
+  (void)argument;
+
+  KvmsBattery_Init(&huart3);
+  battery_next_tick = osKernelGetTickCount();
+
+  for (;;)
+  {
+    KvmsBattery_Poll();
+    battery_next_tick += BATTERY_BMS_POLL_PERIOD_MS;
+    if (osDelayUntil(battery_next_tick) != osOK)
+    {
+      battery_next_tick = osKernelGetTickCount();
+      osDelay(BATTERY_BMS_POLL_PERIOD_MS);
+    }
+  }
+  /* USER CODE END Battery_BMS_Task */
+}
+
+/* USER CODE BEGIN Header_Rs485_Lift_Task */
+/**
+ * @brief Function implementing the Rs485_Lift thread.
+ * @param argument: Not used
+ * @retval None
+ */
+/* USER CODE END Header_Rs485_Lift_Task */
+void Rs485_Lift_Task(void *argument)
+{
+  /* USER CODE BEGIN Rs485_Lift_Task */
+  (void)argument;
+
+  for (;;)
+  {
+    Rs485Lift_Process();
+    Rs485LiftBootTest_Update();
+    osDelay(1);
+  }
+  /* USER CODE END Rs485_Lift_Task */
 }
 
 /* Private application code --------------------------------------------------*/

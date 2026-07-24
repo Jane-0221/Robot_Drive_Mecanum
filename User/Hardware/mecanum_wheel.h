@@ -20,6 +20,8 @@ typedef struct
     float wheel_cmd_rf;
     float wheel_cmd_rb;
     float wheel_cmd_lb;
+    float wheel_raw_max_abs;
+    float wheel_limit_scale;
     float fb_speed_lf;
     float fb_speed_rf;
     float fb_speed_rb;
@@ -56,6 +58,22 @@ typedef struct
 } Mecanum_Wheel_Debug_t;
 
 extern volatile Mecanum_Wheel_Debug_t mecanum_debug;
+extern volatile uint32_t mecanum_single_wheel_test_request_debug;
+extern volatile uint32_t mecanum_single_wheel_test_active_debug;
+extern volatile uint32_t mecanum_single_wheel_test_duration_ms_debug;
+extern volatile uint32_t mecanum_single_wheel_test_end_tick_debug;
+extern volatile float mecanum_single_wheel_test_speed_debug;
+extern volatile uint32_t mecanum_vector_test_request_debug;
+extern volatile uint32_t mecanum_vector_test_active_debug;
+extern volatile uint32_t mecanum_vector_test_duration_ms_debug;
+extern volatile uint32_t mecanum_vector_test_end_tick_debug;
+extern volatile float mecanum_vector_test_x_debug;
+extern volatile float mecanum_vector_test_y_debug;
+extern volatile float mecanum_vector_test_w_debug;
+extern volatile uint32_t mecanum_rx_ext_total_debug;
+extern volatile uint32_t mecanum_rx_last_ext_id_debug;
+extern volatile uint32_t mecanum_rx_last_target_id_debug;
+extern volatile uint32_t mecanum_rx_target_count_debug[16];
 
 void Mecanum_Wheel_Init(void);
 void Mecanum_Wheel_Update(void);

@@ -13,7 +13,10 @@
 
 #include "stdint.h"
 #include "stdbool.h"
+#include "stm32h7xx_hal.h"
 void VirCom_send(uint8_t data[],uint16_t len);
 void VirCom_rev(uint8_t data[],uint16_t len);
+uint8_t VirCom_TxReady(void);
+HAL_StatusTypeDef VirCom_try_send(uint8_t data[], uint16_t len);
 #endif
 //end of file

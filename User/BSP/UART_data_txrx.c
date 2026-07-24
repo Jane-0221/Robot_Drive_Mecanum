@@ -19,6 +19,7 @@
 #include "stp23l.h"
 #include "pt_sensor.h"
 #include "uart_protocol.h"
+#include "kvms_battery.h"
 // DMA控制变量
 extern DMA_HandleTypeDef hdma_uart5_rx; // 遥控器，仅用接受
 extern DMA_HandleTypeDef hdma_uart7_rx; // 串口7
@@ -35,6 +36,7 @@ extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart2;
 extern UART_HandleTypeDef huart5; // 遥控器，可能用不到
 extern UART_HandleTypeDef huart7;
+extern UART_HandleTypeDef huart3;
 extern UART_HandleTypeDef huart10;
 
 // 将上述串口+DMA整合，并包含缓冲区
@@ -122,6 +124,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     HAL_UARTEx_ReceiveToIdle_DMA(huart, UART10_data.rev_data, UART_BUFFER_SIZE);
     __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
   }
+  else if (huart == &huart3)
+  {
+    KvmsBattery_OnRxEvent(huart, Size);
+  }
 }
 
 /**
@@ -155,6 +161,10 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
   {
     HAL_UARTEx_ReceiveToIdle_DMA(&huart1, UART1_data.rev_data, UART_BUFFER_SIZE);
     __HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT);
+  }
+  else if (huart == &huart3)
+  {
+    KvmsBattery_RestartRx();
   }
 }
 // end of file

@@ -2,6 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "DAPlink-Battery-BMS",
+      "cwd": "${workspaceRoot}",
+      "executable": "${workspaceRoot}\\build\\Omni_damiao.elf",
+      "request": "launch",
+      "type": "cortex-debug",
+      "device": "${workspaceRoot}\\debug\\STM32H723VGTx",
+      "svdFile": "${workspaceRoot}\\debug\\STM32H723.svd",
+      "servertype": "openocd",
+      "configFiles": [
+        "${workspaceRoot}\\debug\\openocd_dap.cfg"
+      ],
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "rtos": "FreeRTOS",
+      "preLaunchTask": "build task"
+    },
+    {
       "name": "STlink",
       "cwd": "${workspaceRoot}",
       "executable": "${workspaceRoot}\\build\\Omni_damiao.elf",
@@ -18,7 +37,6 @@
         "enabled": true,
         "samplesPerSecond": 4
       },
-      "runToEntryPoint": "main",
       "rtos": "FreeRTOS",
       "preLaunchTask": "build task"
     },
@@ -39,7 +57,6 @@
         "enabled": true,
         "samplesPerSecond": 4
       },
-      "runToEntryPoint": "main",
       "rtos": "FreeRTOS",
       "preLaunchTask": "build task"
     },

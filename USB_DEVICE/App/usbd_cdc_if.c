@@ -34,6 +34,7 @@
 /* Private variables ---------------------------------------------------------*/
 uint8_t USB_send_buffer[USB_SEND_BUFFER_SIZE];
 fifo_s_t USB_send_fifo;
+static uint8_t USB_send_active_buffer[64];
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -318,9 +319,8 @@ static int8_t CDC_TransmitCplt_HS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
   UNUSED(Len);
   UNUSED(epnum);
   if(USB_send_fifo.used_num!=0){
-    char buffer[65];
-    int len = fifo_s_gets(&USB_send_fifo,buffer,64);
-    CDC_Transmit_HS((uint8_t*)buffer,len);
+    int len = fifo_s_gets(&USB_send_fifo, (char *)USB_send_active_buffer, sizeof(USB_send_active_buffer));
+    CDC_Transmit_HS(USB_send_active_buffer, len);
   }
   
   /* USER CODE END 14 */

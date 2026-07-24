@@ -142,7 +142,7 @@ void RobStride_Motor_Analysis(RobStride_Motor_t* motor, uint8_t* DataFrame, uint
 void RobStride_Motor_move_control(RobStride_Motor_t* motor, hcan_t* hcan, float Torque, float Angle, float Speed, float Kp, float Kd); // 修改：增加hcan参数
 void RobStride_Motor_Pos_control(RobStride_Motor_t* motor, hcan_t* hcan, float Speed, float Angle); // 修改：增加hcan参数
 void RobStride_Motor_CSP_control(RobStride_Motor_t* motor, hcan_t* hcan, float Angle, float limit_spd); // 修改：增加hcan参数
-void RobStride_Motor_Speed_control(RobStride_Motor_t* motor, hcan_t* hcan, float Speed, float limit_cur); // 修改：增加hcan参数
+void RobStride_Motor_Speed_control(RobStride_Motor_t* motor, hcan_t* hcan, float Speed, float limit_cur, float acceleration_limit); // 修改：增加hcan参数
 void RobStride_Motor_current_control(RobStride_Motor_t* motor, hcan_t* hcan, float current); // 修改：增加hcan参数
 void RobStride_Motor_Set_Zero_control(RobStride_Motor_t* motor, hcan_t* hcan); // 修改：增加hcan参数
 void Enable_Motor(RobStride_Motor_t* motor, hcan_t* hcan); // 修改：增加hcan参数

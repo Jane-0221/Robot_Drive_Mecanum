@@ -1,9 +1,30 @@
 #include "arm_sv.h"
 #include "bsp_pca9685.h"
+#include "main.h"
 #include "stdio.h"
 
 #define PI 3.14159265358979323846f
 #define THREE_PI_OVER_FOUR (PI * 3.0f / 4.0f)
+#define ARM_SV_BOOT_TEST_ENABLE 1U
+#define ARM_SV_BOOT_TEST_START_DELAY_MS 1000U
+#define ARM_SV_BOOT_TEST_HOLD_MS 500U
+#define ARM_SV_BOOT_TEST_CENTER_DUTY 0.075f
+#define ARM_SV_BOOT_TEST_DELTA_DUTY 0.015f
+#define ARM_SV_SIMPLE_MOTION_ENABLE 0U
+#define ARM_SV_SIMPLE_MOTION_START_DELAY_MS 1000U
+#define ARM_SV_SIMPLE_MOTION_STEP_MS 1500U
+#define ARM_SV_SIMPLE_MOTION_CENTER_DUTY 0.075f
+#define ARM_SV_SIMPLE_MOTION_DELTA_DUTY 0.010f
+
+static const uint8_t servo_to_pca_channel[ARM_SV_COUNT] = {
+    15U, /* Servo 1 */
+    12U, /* Servo 2 */
+    10U, /* Servo 3 */
+    8U,  /* Servo 4 */
+    7U,  /* Servo 5 */
+    3U   /* Servo 6 */
+};
+
 float motor_radians[6] = {0.0f};
 
 // ===================== 斜坡相关变量 =====================
@@ -134,10 +155,86 @@ ARM_SV_Duties_t duties_tx;
  */
 static void set_sv_duty(uint8_t id, float duty)
 {
+    uint8_t pca_channel;
+
     if (id >= ARM_SV_COUNT) // 舵机编号越界检查
         return;
-    PCA9685_SetDuty(id, duty); // 调用PCA9685驱动设置指定舵机的PWM占空比
+
+    pca_channel = servo_to_pca_channel[id];
+    PCA9685_SetDuty(pca_channel, duty); // 调用PCA9685驱动设置指定舵机的PWM占空比
     current_duties[id] = duty; // 更新当前占空比缓存
+}
+
+static uint8_t ARM_SV_SimpleMotionUpdate(void)
+{
+#if (ARM_SV_SIMPLE_MOTION_ENABLE != 0U)
+    static uint32_t tick_ms = 0U;
+    static uint8_t demo_done = 0U;
+    uint32_t elapsed_ms = tick_ms++;
+    uint32_t sequence_ms;
+    uint32_t phase_ms;
+    uint8_t active_servo;
+
+    if (demo_done != 0U)
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < ARM_SV_COUNT; i++)
+    {
+        set_sv_duty(i, ARM_SV_SIMPLE_MOTION_CENTER_DUTY);
+    }
+
+    if (elapsed_ms < ARM_SV_SIMPLE_MOTION_START_DELAY_MS)
+    {
+        duties_rx = ARM_SV_GetAllDuties();
+        return 1U;
+    }
+
+    sequence_ms = elapsed_ms - ARM_SV_SIMPLE_MOTION_START_DELAY_MS;
+    active_servo = (uint8_t)(sequence_ms / ARM_SV_SIMPLE_MOTION_STEP_MS);
+    if (active_servo >= ARM_SV_COUNT)
+    {
+        demo_done = 1U;
+        duties_rx = ARM_SV_GetAllDuties();
+        return 0U;
+    }
+
+    phase_ms = sequence_ms % ARM_SV_SIMPLE_MOTION_STEP_MS;
+    if (phase_ms < (ARM_SV_SIMPLE_MOTION_STEP_MS / 3U))
+    {
+        set_sv_duty(active_servo, ARM_SV_SIMPLE_MOTION_CENTER_DUTY + ARM_SV_SIMPLE_MOTION_DELTA_DUTY);
+    }
+    else if (phase_ms < ((ARM_SV_SIMPLE_MOTION_STEP_MS * 2U) / 3U))
+    {
+        set_sv_duty(active_servo, ARM_SV_SIMPLE_MOTION_CENTER_DUTY - ARM_SV_SIMPLE_MOTION_DELTA_DUTY);
+    }
+    duties_rx = ARM_SV_GetAllDuties();
+    return 1U;
+#else
+    return 0U;
+#endif
+}
+
+static void ARM_SV_BootPwmTest(void)
+{
+#if (ARM_SV_BOOT_TEST_ENABLE != 0U)
+    for (uint8_t i = 0U; i < ARM_SV_COUNT; i++)
+    {
+        set_sv_duty(i, ARM_SV_BOOT_TEST_CENTER_DUTY);
+    }
+    HAL_Delay(ARM_SV_BOOT_TEST_START_DELAY_MS);
+
+    for (uint8_t i = 0U; i < ARM_SV_COUNT; i++)
+    {
+        set_sv_duty(i, ARM_SV_BOOT_TEST_CENTER_DUTY + ARM_SV_BOOT_TEST_DELTA_DUTY);
+        HAL_Delay(ARM_SV_BOOT_TEST_HOLD_MS);
+        set_sv_duty(i, ARM_SV_BOOT_TEST_CENTER_DUTY - ARM_SV_BOOT_TEST_DELTA_DUTY);
+        HAL_Delay(ARM_SV_BOOT_TEST_HOLD_MS);
+        set_sv_duty(i, ARM_SV_BOOT_TEST_CENTER_DUTY);
+        HAL_Delay(ARM_SV_BOOT_TEST_HOLD_MS);
+    }
+#endif
 }
 
 // ===================== 对外接口函数定义 =====================
@@ -169,6 +266,8 @@ void ARM_SV_Init(float freq)
     
     // 初始化斜坡发生器
     init_servo_ramps();
+
+    ARM_SV_BootPwmTest();
 }
 
 /**
@@ -365,6 +464,11 @@ void ARM_SV_RampUpdate(float dt)
  */
 void ARM_SV_Tx_Rx()
 {
+    if (ARM_SV_SimpleMotionUpdate() != 0U)
+    {
+        return;
+    }
+
     // 更新斜坡计算（1ms = 0.001秒）
     ARM_SV_RampUpdate(0.001f);
     

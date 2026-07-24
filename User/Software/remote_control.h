@@ -3,12 +3,50 @@
 
 #include "stdint.h"
 #include "main.h"
+#include "Sbus.h"
 #include "uart_protocol.h"
 
 #define CONTROL_MODE_REMOTE 0U
 #define CONTROL_MODE_PC     1U
 
 extern volatile uint8_t control_mode;
+
+typedef struct {
+    SBUS_CH_Struct SBUS_CH;
+} ChassisRemoteSbusDebug_t;
+
+typedef struct {
+    uint32_t uwTick;
+    uint8_t control_mode;
+    uint8_t chassis_mode;
+    float x;
+    float y;
+    float w;
+    UpData_t up_tx_data;
+    PcChassisCtrl_t pc_rx;
+    uint8_t pc_rx_valid;
+    uint32_t pc_rx_count;
+    uint32_t pc_rx_last_tick;
+    uint32_t pc_rx_age_ms;
+    uint8_t pc_rx_timeout;
+    uint8_t pc_mode_rx;
+    uint8_t pc_mode_rx_valid;
+    uint32_t pc_mode_rx_count;
+    uint32_t pc_mode_rx_last_tick;
+    uint32_t control_mode_switch_count;
+    uint32_t control_mode_last_switch_tick;
+} ChassisCommandDebug_t;
+
+extern volatile ChassisRemoteSbusDebug_t chassis_remote_sbus;
+extern volatile ChassisCommandDebug_t chassis_command;
+extern volatile float chassis_lidar_yaw_offset_deg_debug;
+extern volatile float chassis_remote_lidar_vx_debug;
+extern volatile float chassis_remote_lidar_vy_debug;
+extern volatile float chassis_remote_body_vx_debug;
+extern volatile float chassis_remote_body_vy_debug;
+extern volatile uint32_t control_mode_switch_count_debug;
+extern volatile uint32_t control_mode_last_switch_tick_debug;
+extern volatile uint8_t control_mode_last_request_debug;
 
 typedef struct {
     PcMotorCtrl_t latest_rx_command;
@@ -111,7 +149,7 @@ void Up_Down_Motor_Control_Updata(void);
 /**
  * @brief 根据 SBUS 遥控通道更新底盘速度指令。
  *
- * 在指定拨杆组合下读取 CH1/CH2/CH3，转换为横移、前后和旋转速度。
+ * 在指定拨杆组合下读取 CH4/CH3/CH1，转换为前后、横移和旋转速度。
  */
 extern void Chassis_Control_Updata(void);
 
@@ -120,6 +158,7 @@ extern void Chassis_Control_Updata(void);
 /**
  * @brief 根据 PC 下发数据更新气泵状态。
  */
+extern void Control_Mode_Updata(void);
 extern void PC_Pump_Control_Updata(void);
 
 /**
@@ -136,6 +175,7 @@ extern void PC_Head_Motor_Control_Updata(void);
  * @brief 根据 PC 下发数据更新升降机构目标高度。
  */
 extern void PC_Up_Down_Motor_Control_Updata(void);
+extern void PC_Rs485_Lift_Control_Updata(void);
 
 /**
  * @brief 根据 PC 下发数据更新机械臂舵机和电机目标角度。
@@ -162,4 +202,4 @@ extern volatile uint32_t head_pc_tx_invalid_count_debug[2];
 extern void pc_up_tx_data(void);
 extern void pc_arm_tx_data(void);
 
-#endif // !__REMOTE_CONTROL__
+#endif // !__REMOTE_CONTROL_H__

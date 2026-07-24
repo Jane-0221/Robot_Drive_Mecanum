@@ -44,6 +44,7 @@
 #include "pump_control.h"
 #include "remote_control.h"
 #include "user_key.h"
+#include "rs485_lift.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,7 +94,7 @@ int main(void)
   /* USER CODE END 1 */
 
   /* MPU Configuration--------------------------------------------------------*/
-  MPU_Config();
+     MPU_Config();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -125,6 +126,8 @@ int main(void)
   MX_UART5_Init();
   MX_UART7_Init();
   MX_USART10_UART_Init();
+  MX_USART2_UART_Init();
+  MX_USART3_UART_Init();
   MX_FDCAN3_Init();
   MX_IWDG1_Init();
   MX_USART1_UART_Init();
@@ -144,6 +147,7 @@ int main(void)
   remote_control_init();
   Pump_Init();
   Servo_Lift_Init();
+  Rs485Lift_Init(&huart2);
   ARM_SV_Init(50.0f);
   /* USER CODE END 2 */
 

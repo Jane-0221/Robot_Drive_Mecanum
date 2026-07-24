@@ -7,7 +7,6 @@ extern "C" {
 
 #include <stdint.h>
 
-#define CHASSIS_MODE_OMNI    0U
 #define CHASSIS_MODE_MECANUM 1U
 
 extern volatile uint8_t chassis_mode;

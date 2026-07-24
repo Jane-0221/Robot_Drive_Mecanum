@@ -3,11 +3,87 @@
 
 // 包含HAL I2C头文件，并声明外部I2C句柄（由CubeMX生成）
 #include "i2c.h"
+extern I2C_HandleTypeDef hi2c1;
 extern I2C_HandleTypeDef hi2c2;   // 使用I2C2，与您的初始化对应
+
+volatile uint8_t pca9685_ready_debug = 0U;
+volatile uint8_t pca9685_i2c_bus_debug = 0U;
+volatile uint8_t pca9685_addr_7bit_debug = 0U;
+volatile uint32_t pca9685_last_hal_status_debug = 0U;
+volatile uint32_t pca9685_write_error_count_debug = 0U;
+volatile uint32_t pca9685_read_error_count_debug = 0U;
+
+static I2C_HandleTypeDef *pca9685_i2c_handle = &hi2c2;
+static uint16_t pca9685_dev_addr = PCA9685_ADDR;
 
 // 延时函数（需外部实现）
 extern void delay_us(uint32_t us);
 extern void HAL_Delay(uint32_t ms);
+
+static uint8_t PCA9685_TrySelectDeviceOnBus(I2C_HandleTypeDef *hi2c, uint8_t bus_id)
+{
+    HAL_StatusTypeDef status;
+
+    status = HAL_I2C_IsDeviceReady(hi2c, PCA9685_ADDR, 2, 20);
+    pca9685_last_hal_status_debug = (uint32_t)status;
+    if (status == HAL_OK)
+    {
+        pca9685_i2c_handle = hi2c;
+        pca9685_dev_addr = PCA9685_ADDR;
+        pca9685_i2c_bus_debug = bus_id;
+        pca9685_addr_7bit_debug = (uint8_t)(PCA9685_ADDR >> 1);
+        pca9685_ready_debug = 1U;
+        return 1U;
+    }
+
+    for (uint8_t addr_7bit = 0x40U; addr_7bit <= 0x7FU; addr_7bit++)
+    {
+        uint16_t dev_addr = (uint16_t)(addr_7bit << 1);
+
+        status = HAL_I2C_IsDeviceReady(hi2c, dev_addr, 1, 10);
+        pca9685_last_hal_status_debug = (uint32_t)status;
+        if (status == HAL_OK)
+        {
+            pca9685_i2c_handle = hi2c;
+            pca9685_dev_addr = dev_addr;
+            pca9685_i2c_bus_debug = bus_id;
+            pca9685_addr_7bit_debug = addr_7bit;
+            pca9685_ready_debug = 1U;
+            return 1U;
+        }
+    }
+
+    return 0U;
+}
+
+static void PCA9685_SelectDevice(void)
+{
+    pca9685_ready_debug = 0U;
+    pca9685_i2c_bus_debug = 0U;
+    pca9685_addr_7bit_debug = 0U;
+    pca9685_i2c_handle = &hi2c2;
+    pca9685_dev_addr = PCA9685_ADDR;
+
+    if (PCA9685_TrySelectDeviceOnBus(&hi2c2, 2U) != 0U)
+    {
+        return;
+    }
+
+    if (hi2c1.Instance != I2C1)
+    {
+        MX_I2C1_Init();
+    }
+
+    if (PCA9685_TrySelectDeviceOnBus(&hi2c1, 1U) != 0U)
+    {
+        return;
+    }
+
+    pca9685_i2c_handle = &hi2c2;
+    pca9685_dev_addr = PCA9685_ADDR;
+    pca9685_i2c_bus_debug = 2U;
+    pca9685_addr_7bit_debug = (uint8_t)(PCA9685_ADDR >> 1);
+}
 
 /******************************************************************
  * 函 数 名 称：PCA9685_Write
@@ -15,9 +91,18 @@ extern void HAL_Delay(uint32_t ms);
  * 形    参：reg 寄存器地址，data 写入的数据
  * 返 回 值：无
  ******************************************************************/
-static void PCA9685_Write(uint8_t reg, uint8_t data)
+static HAL_StatusTypeDef PCA9685_Write(uint8_t reg, uint8_t data)
 {
-    HAL_I2C_Mem_Write(&hi2c2, PCA9685_ADDR, reg, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+    HAL_StatusTypeDef status;
+
+    status = HAL_I2C_Mem_Write(pca9685_i2c_handle, pca9685_dev_addr, reg, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+    pca9685_last_hal_status_debug = (uint32_t)status;
+    if (status != HAL_OK)
+    {
+        pca9685_write_error_count_debug++;
+    }
+
+    return status;
 }
 
 /******************************************************************
@@ -28,8 +113,16 @@ static void PCA9685_Write(uint8_t reg, uint8_t data)
  ******************************************************************/
 static uint8_t PCA9685_Read(uint8_t reg)
 {
+    HAL_StatusTypeDef status;
     uint8_t data = 0;
-    HAL_I2C_Mem_Read(&hi2c2, PCA9685_ADDR, reg, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+
+    status = HAL_I2C_Mem_Read(pca9685_i2c_handle, pca9685_dev_addr, reg, I2C_MEMADD_SIZE_8BIT, &data, 1, 100);
+    pca9685_last_hal_status_debug = (uint32_t)status;
+    if (status != HAL_OK)
+    {
+        pca9685_read_error_count_debug++;
+    }
+
     return data;
 }
 
@@ -39,17 +132,25 @@ static uint8_t PCA9685_Read(uint8_t reg)
  * 形    参：channel 通道号 0~15，on ON计数值，off OFF计数值
  * 返 回 值：无
  ******************************************************************/
-static void PCA9685_setPWM(uint8_t channel, uint16_t on, uint16_t off)
+static HAL_StatusTypeDef PCA9685_setPWM(uint8_t channel, uint16_t on, uint16_t off)
 {
     uint8_t reg = LED0_ON_L + 4 * channel;
     uint8_t data[4];
+    HAL_StatusTypeDef status;
 
     data[0] = on  & 0xFF;        // ON_L
     data[1] = on  >> 8;           // ON_H
     data[2] = off & 0xFF;        // OFF_L
     data[3] = off >> 8;           // OFF_H
 
-    HAL_I2C_Mem_Write(&hi2c2, PCA9685_ADDR, reg, I2C_MEMADD_SIZE_8BIT, data, 4, 100);
+    status = HAL_I2C_Mem_Write(pca9685_i2c_handle, pca9685_dev_addr, reg, I2C_MEMADD_SIZE_8BIT, data, 4, 100);
+    pca9685_last_hal_status_debug = (uint32_t)status;
+    if (status != HAL_OK)
+    {
+        pca9685_write_error_count_debug++;
+    }
+
+    return status;
 }
 
 /******************************************************************
@@ -96,6 +197,8 @@ static void PCA9685_setFreq(float freq)
  ******************************************************************/
 void PCA9685_Init(float freq)
 {
+    PCA9685_SelectDevice();
+
     // 复位Mode1寄存器（必须步骤）
     PCA9685_Write(PCA9685_MODE1, 0x00);
 

@@ -655,10 +655,11 @@ void RobStride_Motor_CSP_control(RobStride_Motor_t* motor, hcan_t* hcan, float A
 * 函数功能  : RobStride电机速度模式
 * 修改点：参数改为hcan_t* hcan
 *******************************************************************************/
-void RobStride_Motor_Speed_control(RobStride_Motor_t* motor, hcan_t* hcan, float Speed, float limit_cur)
+void RobStride_Motor_Speed_control(RobStride_Motor_t* motor, hcan_t* hcan, float Speed, float limit_cur, float acceleration_limit)
 {
     motor->Motor_Set_All.set_speed = Speed;
     motor->Motor_Set_All.set_limit_cur = limit_cur;
+    motor->Motor_Set_All.set_acceleration = acceleration_limit;
     
     if (motor->drw.run_mode.data != 2)
     {
@@ -667,7 +668,7 @@ void RobStride_Motor_Speed_control(RobStride_Motor_t* motor, hcan_t* hcan, float
         Enable_Motor(motor, hcan);
         motor->Motor_Set_All.set_motor_mode = Speed_control_mode;
         Set_RobStride_Motor_parameter(motor, hcan, 0X7018, motor->Motor_Set_All.set_limit_cur, 'p');
-        Set_RobStride_Motor_parameter(motor, hcan, 0X7022, 10, 'p');
+        Set_RobStride_Motor_parameter(motor, hcan, 0X7022, motor->Motor_Set_All.set_acceleration, 'p');
     }
     
     Set_RobStride_Motor_parameter(motor, hcan, 0X700A, motor->Motor_Set_All.set_speed, 'p');

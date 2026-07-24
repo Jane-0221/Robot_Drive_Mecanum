@@ -14,4 +14,11 @@
 void PCA9685_Init(float freq);                          // 初始化PCA9685，设置PWM频率
 void PCA9685_SetDuty(uint8_t channel, float duty);      // 设置指定通道的PWM占空比 (0.0 ~ 1.0)
 
+extern volatile uint8_t pca9685_ready_debug;
+extern volatile uint8_t pca9685_i2c_bus_debug;
+extern volatile uint8_t pca9685_addr_7bit_debug;
+extern volatile uint32_t pca9685_last_hal_status_debug;
+extern volatile uint32_t pca9685_write_error_count_debug;
+extern volatile uint32_t pca9685_read_error_count_debug;
+
 #endif
