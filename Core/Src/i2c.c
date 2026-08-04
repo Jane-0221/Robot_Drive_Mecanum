@@ -183,6 +183,12 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef* i2cHandle)
     __HAL_RCC_I2C2_CLK_ENABLE();
   /* USER CODE BEGIN I2C2_MspInit 1 */
 
+    /* PCA9685运行期采用I2C2中断发送；优先级低于现有5级运动/通信中断。 */
+    HAL_NVIC_SetPriority(I2C2_EV_IRQn, 6, 0);
+    HAL_NVIC_EnableIRQ(I2C2_EV_IRQn);
+    HAL_NVIC_SetPriority(I2C2_ER_IRQn, 6, 0);
+    HAL_NVIC_EnableIRQ(I2C2_ER_IRQn);
+
   /* USER CODE END I2C2_MspInit 1 */
   }
 }
@@ -227,6 +233,11 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle)
     HAL_GPIO_DeInit(GPIOB, GPIO_PIN_11);
 
   /* USER CODE BEGIN I2C2_MspDeInit 1 */
+
+    HAL_NVIC_DisableIRQ(I2C2_EV_IRQn);
+    HAL_NVIC_DisableIRQ(I2C2_ER_IRQn);
+    HAL_NVIC_ClearPendingIRQ(I2C2_EV_IRQn);
+    HAL_NVIC_ClearPendingIRQ(I2C2_ER_IRQn);
 
   /* USER CODE END I2C2_MspDeInit 1 */
   }

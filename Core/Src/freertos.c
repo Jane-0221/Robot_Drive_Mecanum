@@ -74,6 +74,7 @@ volatile uint32_t pc_battery_tx_last_tick_debug = 0U;
 #define PC_COMM_TX_PERIOD_MS 10U
 #define PC_BATTERY_TX_PERIOD_MS 1000U
 #define ARM_CONTROL_TX_PERIOD_MS 1U
+#define ARM_SV_CONTROL_PERIOD_MS 5U
 #define LOG_TASK_IDLE_PERIOD_MS 1000U
 #define BATTERY_BMS_POLL_PERIOD_MS 1000U
 #define RS485_LIFT_BOOT_TEST_ENABLE 0U
@@ -173,8 +174,9 @@ const osThreadAttr_t Log_and_debug_attributes = {
 osThreadId_t Arm_SVHandle;
 const osThreadAttr_t Arm_SV_attributes = {
     .name = "Arm_SV",
-    .stack_size = 128 * 4,
-    .priority = (osPriority_t)osPriorityLow2,
+    .stack_size = 512 * 4,
+    /* 5 ms姿态轨迹必须能抢占RS485升降机的同步超时轮询。 */
+    .priority = (osPriority_t)osPriorityHigh2,
 };
 /* Definitions for PC_Comm */
 osThreadId_t PC_CommHandle;
@@ -470,7 +472,7 @@ void Remote_control_Task(void *argument)
   int a = 0;
   /* Infinite loop */
   for (;;)
-  {
+  {     
     uint32_t tick_now = osKernelGetTickCount();
     if ((tick_now - pt_press_last_tick) >= PT_PRESS_POLL_PERIOD_MS)
     {
@@ -782,12 +784,17 @@ void Log_and_debug_Task(void *argument)
 void Arm_SV_Task(void *argument)
 {
   /* USER CODE BEGIN Arm_SV_Task */
-  /* Infinite loop */
+  uint32_t next_tick = osKernelGetTickCount();
 
   for (;;)
   {
     ARM_SV_Tx_Rx();
-    osDelay(1);
+    next_tick += ARM_SV_CONTROL_PERIOD_MS;
+    if (osDelayUntil(next_tick) != osOK)
+    {
+      next_tick = osKernelGetTickCount();
+      osDelay(ARM_SV_CONTROL_PERIOD_MS);
+    }
   }
   /* USER CODE END Arm_SV_Task */
 }

@@ -11,7 +11,6 @@
 #include "pump_control.h"
 #include "arm_sv.h"
 #include "uart_protocol.h" // 添加PC通信协议头文件
-#include "arm_sv.h"
 #include "chassis.h"
 #include "mecanum_wheel.h"
 #include "cmsis_os.h"
@@ -51,6 +50,33 @@
 #define CHASSIS_LIDAR_YAW_OFFSET_SANITY_DEG 360.0f
 #define CHASSIS_DEG_TO_RAD (HEAD_PI / HEAD_HALF_TURN_DEG)
 // extern DnData_t pc_dn_data;
+
+static const float arm_servo_pose_left[ARM_SV_COUNT] = {
+    -0.101999983f,
+    -0.29700008f,
+    1.80600858f,
+    2.40001273f,
+    0.0119999889f,
+    -0.0150000118f,
+};
+
+static const float arm_servo_pose_center[ARM_SV_COUNT] = {
+    -0.101999983f,
+    -0.29700008f,
+    1.79100847f,
+    1.88400912f,
+    0.0119999889f,
+    -0.0150000118f,
+};
+
+static const float arm_servo_pose_right[ARM_SV_COUNT] = {
+    -0.101999983f,
+    -0.29700008f,
+    1.88700914f,
+    1.30800509f,
+    0.0119999889f,
+    -0.0150000118f,
+};
 
 volatile uint8_t pc_arm_motor_enable_state_debug[ARM_LOGICAL_MOTOR_COUNT] = {
     PC_ARM_MOTOR_DEBUG_STATE_NONE,
@@ -811,20 +837,20 @@ void Head_Motor_Control_Updata(void)
             // motor_radians[5] = PI / 2;
             if (SBUS_CH.CH1 > (MID_VALUE + RANGE))
             {
-                motor_radians[0] += 0.003f;
+                ARM_SV_AdjustRampTarget(0U, 0.003f);
             }
             else if (SBUS_CH.CH1 < (MID_VALUE - RANGE))
             {
-                motor_radians[0] -= 0.003f;
+                ARM_SV_AdjustRampTarget(0U, -0.003f);
             }
 
             if (SBUS_CH.CH2 > (MID_VALUE + RANGE))
             {
-                motor_radians[1] += 0.003f;
+                ARM_SV_AdjustRampTarget(1U, 0.003f);
             }
             else if (SBUS_CH.CH2 < (MID_VALUE - RANGE))
             {
-                motor_radians[1] -= 0.003f;
+                ARM_SV_AdjustRampTarget(1U, -0.003f);
             }
 
             break;
@@ -847,20 +873,20 @@ void Head_Motor_Control_Updata(void)
             // motor_radians[5] = 0.0f;
             if (SBUS_CH.CH1 > (MID_VALUE + RANGE))
             {
-                motor_radians[2] += 0.003f;
+                ARM_SV_AdjustRampTarget(2U, 0.003f);
             }
             else if (SBUS_CH.CH1 < (MID_VALUE - RANGE))
             {
-                motor_radians[2] -= 0.003f;
+                ARM_SV_AdjustRampTarget(2U, -0.003f);
             }
 
             if (SBUS_CH.CH2 > (MID_VALUE + RANGE))
             {
-                motor_radians[3] += 0.003f;
+                ARM_SV_AdjustRampTarget(3U, 0.003f);
             }
             else if (SBUS_CH.CH2 < (MID_VALUE - RANGE))
             {
-                motor_radians[3] -= 0.003f;
+                ARM_SV_AdjustRampTarget(3U, -0.003f);
             }
 
             break;
@@ -883,20 +909,20 @@ void Head_Motor_Control_Updata(void)
             // motor_radians[5] = -PI / 4;
             if (SBUS_CH.CH1 > (MID_VALUE + RANGE))
             {
-                motor_radians[4] += 0.003f;
+                ARM_SV_AdjustRampTarget(4U, 0.003f);
             }
             else if (SBUS_CH.CH1 < (MID_VALUE - RANGE))
             {
-                motor_radians[4] -= 0.003f;
+                ARM_SV_AdjustRampTarget(4U, -0.003f);
             }
 
             if (SBUS_CH.CH2 > (MID_VALUE + RANGE))
             {
-                motor_radians[5] += 0.003f;
+                ARM_SV_AdjustRampTarget(5U, 0.003f);
             }
             else if (SBUS_CH.CH2 < (MID_VALUE - RANGE))
             {
-                motor_radians[5] -= 0.003f;
+                ARM_SV_AdjustRampTarget(5U, -0.003f);
             }
 
             break;
@@ -912,30 +938,15 @@ void Head_Motor_Control_Updata(void)
         switch (SBUS_CH.CH6)
         {
         case HIGH_VALUE: // 挥手到左边（第三张图的弧度值）
-            motor_radians[0] = -0.101999983;
-            motor_radians[1] = -0.29700008;
-            motor_radians[2] = 1.80600858;
-            motor_radians[3] = 2.40001273;
-            motor_radians[4] = 0.0119999889;
-            motor_radians[5] = -0.0150000118;
+            ARM_SV_SetAllRampTargets(arm_servo_pose_left);
             break;
 
         case MID_VALUE: // 举手（中间姿态，第二张图的弧度值）
-            motor_radians[0] = -0.101999983;
-            motor_radians[1] = -0.29700008;
-            motor_radians[2] = 1.79100847;
-            motor_radians[3] = 1.88400912;
-            motor_radians[4] = 0.0119999889;
-            motor_radians[5] = -0.0150000118;
+            ARM_SV_SetAllRampTargets(arm_servo_pose_center);
             break;
 
         case LOW_VALUE: // 挥手到右边（第一张图的弧度值）
-            motor_radians[0] = -0.101999983;
-            motor_radians[1] = -0.29700008;
-            motor_radians[2] = 1.88700914;
-            motor_radians[3] = 1.30800509;
-            motor_radians[4] = 0.0119999889;
-            motor_radians[5] = -0.0150000118;
+            ARM_SV_SetAllRampTargets(arm_servo_pose_right);
             break;
 
         // 默认情况：保持当前关节角度（避免无操作时数组值异常）
@@ -1168,12 +1179,7 @@ void PC_Arm_Motor_Control_Updata(void)
     }
 
     // 将PC传入的6路舵机角度值赋值给motor_radians数组
-    motor_radians[0] = pc_snapshot.pc_target_servo_angles[0];
-    motor_radians[1] = pc_snapshot.pc_target_servo_angles[1];
-    motor_radians[2] = pc_snapshot.pc_target_servo_angles[2];
-    motor_radians[3] = pc_snapshot.pc_target_servo_angles[3];
-    motor_radians[4] = pc_snapshot.pc_target_servo_angles[4];
-    motor_radians[5] = pc_snapshot.pc_target_servo_angles[5];
+    ARM_SV_SetAllRampTargets(pc_snapshot.pc_target_servo_angles);
     // 将PC传入的6路电机角度值赋值给电机臂目标角度
     target_motor_angles[0] = pc_snapshot.pc_target_motor_angles[0];
     target_motor_angles[1] = pc_snapshot.pc_target_motor_angles[1];

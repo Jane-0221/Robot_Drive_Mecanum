@@ -43,6 +43,9 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+__attribute__((section(".hardfault_noinit"), aligned(4)))
+volatile uint32_t hardfault_capture_debug[15];
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -52,6 +55,31 @@
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+__attribute__((used, noinline))
+void HardFault_Capture(uint32_t *stack_frame, uint32_t exc_return)
+{
+  hardfault_capture_debug[0] = 0x48464C54U;
+  hardfault_capture_debug[1] = SCB->CFSR;
+  hardfault_capture_debug[2] = SCB->HFSR;
+  hardfault_capture_debug[3] = SCB->MMFAR;
+  hardfault_capture_debug[4] = SCB->BFAR;
+  hardfault_capture_debug[5] = exc_return;
+  hardfault_capture_debug[6] = stack_frame[0];
+  hardfault_capture_debug[7] = stack_frame[1];
+  hardfault_capture_debug[8] = stack_frame[2];
+  hardfault_capture_debug[9] = stack_frame[3];
+  hardfault_capture_debug[10] = stack_frame[4];
+  hardfault_capture_debug[11] = stack_frame[5];
+  hardfault_capture_debug[12] = stack_frame[6];
+  hardfault_capture_debug[13] = stack_frame[7];
+  hardfault_capture_debug[14] = HAL_GetTick();
+  __DSB();
+
+  while (1)
+  {
+  }
+}
 
 /* USER CODE END 0 */
 
@@ -86,6 +114,8 @@ extern TIM_HandleTypeDef htim23;
 
 /* USER CODE BEGIN EV */
 
+extern I2C_HandleTypeDef hi2c2;
+
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -109,20 +139,15 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-void HardFault_Handler(void)
+__attribute__((naked)) void HardFault_Handler(void)
 {
-  /* USER CODE BEGIN HardFault_IRQn 0 */
-  // /* Go to infinite loop when Hard Fault exception occurs */
-  // volatile int a = 1;
-  // a++;
-  // while (1);
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    
-    /* USER CODE END W1_HardFault_IRQn 0 */
-  }
+  __asm volatile(
+      "tst lr, #4        \n"
+      "ite eq            \n"
+      "mrseq r0, msp     \n"
+      "mrsne r0, psp     \n"
+      "mov r1, lr        \n"
+      "b HardFault_Capture\n");
 }
 
 /**
@@ -611,5 +636,22 @@ void TIM23_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+  * @brief This function handles I2C2 event interrupt.
+  */
+void I2C2_EV_IRQHandler(void)
+{
+  /* PCA9685异步帧的数据、完成和NACK事件由HAL状态机推进。 */
+  HAL_I2C_EV_IRQHandler(&hi2c2);
+}
+
+/**
+  * @brief This function handles I2C2 error interrupt.
+  */
+void I2C2_ER_IRQHandler(void)
+{
+  HAL_I2C_ER_IRQHandler(&hi2c2);
+}
 
 /* USER CODE END 1 */

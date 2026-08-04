@@ -197,6 +197,11 @@ KEEP (*(.RAM_D2_Section ))
 KEEP (*(.RAM_D3_Section ))
 . = ALIGN(4);
 } >RAM_D3
+.hardfault_noinit (NOLOAD) :
+{. = ALIGN(4);
+KEEP (*(.hardfault_noinit))
+. = ALIGN(4);
+} >RAM_D3
 .ITCMRAM_Section :
 {. = ALIGN(4);
 KEEP (*(.ITCMRAM_Section ))
